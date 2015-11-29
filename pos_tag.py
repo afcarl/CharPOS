@@ -10,12 +10,12 @@ import lasagne
 #Lasagne Seed for Reproducibility
 lasagne.random.set_rng(np.random.RandomState(1))
 
-vocab_size = 3 #84
+vocab_size = 84 #3
 # Sequence Length
-SEQ_LENGTH = 4 #96
+SEQ_LENGTH = 96 #4
 
 # Number of units in the two hidden (LSTM) layers
-N_HIDDEN = 512
+N_HIDDEN = 256
 
 # Optimization learning rate
 LEARNING_RATE = .01
@@ -30,12 +30,12 @@ PRINT_FREQ = 1000
 NUM_EPOCHS = 50
 
 # Batch Size
-BATCH_SIZE = 2 #100
+BATCH_SIZE = 100 #2
 
 # Number of tags
-NUM_TAGS = 2 #46
+NUM_TAGS = 46 #2
 
-char_dims = 20
+char_dims = 10
 dim_out = 50
 def main(num_epochs=NUM_EPOCHS):
     print "Building network ..."
@@ -113,14 +113,24 @@ def main(num_epochs=NUM_EPOCHS):
     # The phrase is set using the variable generation_phrase.
     # The optional input "N" is used to set the number of characters of text to predict. 
     
-    tmp_xs = [np.array([[[1,0,0], [1,0,0], [0,1,0], [0,1,0]], [[1,0,0],[0,0,1],[0,0,1],[1,0,0]]], dtype='float32'), np.array([[[0,1,0],[0,1,0],[0,1,0],[0,1,0]], [[1,0,0],[0,0,1],[1,0,0],[0,0,1]]], dtype='float32')]
-    tmp_ys = [np.array([0, 1], dtype='int32'), np.array([1, 0], dtype='int32')]
-    #train_xs, train_ys = loader.get_train()
-    #dev_xs, dev_ys = loader.get_dev()
-    #test_xs, test_ys = loader.get_test()
-    train_xs, train_ys = tmp_xs, tmp_ys
-    dev_xs, dev_ys = tmp_xs, tmp_ys
-    test_xs, test_ys = tmp_xs, tmp_ys
+    #tmp_xs = [np.array([[[1,0,0], [1,0,0], [0,1,0], [0,1,0]], [[1,0,0],[0,0,1],[0,0,1],[1,0,0]]], dtype='float32'), np.array([[[0,1,0],[0,1,0],[0,1,0],[0,1,0]], [[1,0,0],[0,0,1],[1,0,0],[0,0,1]]], dtype='float32')]
+    #tmp_ys = [np.array([0, 1], dtype='int32'), np.array([1, 0], dtype='int32')]
+    def get_data(fname):
+        import cPickle
+        with open(fname, 'rb') as handle:
+            data = cPickle.load(handle)
+        return data[0], data[1]
+
+    print 'Loading train'
+    train_xs, train_ys = get_data('train.pkl')
+    print 'Loading dev'
+    dev_xs, dev_ys = get_data('dev.pkl')
+    print 'Loading test'
+    test_xs, test_ys = get_data('test.pkl')
+    print 'Sizes:\tTrain: %d\tDev: %d\tTest: %d\n' % (len(train_xs) * BATCH_SIZE, len(dev_xs) * BATCH_SIZE, len(test_xs) * BATCH_SIZE)
+    #train_xs, train_ys = tmp_xs, tmp_ys
+    #dev_xs, dev_ys = tmp_xs, tmp_ys
+    #test_xs, test_ys = tmp_xs, tmp_ys
 
 
     def get_accuracy(pXs, pYs):
@@ -131,10 +141,14 @@ def main(num_epochs=NUM_EPOCHS):
     print("Training ...")
     try:
         for it in xrange(num_epochs):
+            print x.shape, y.shape
             avg_cost = 0;
             total = 0.
+            cur = 0
             for x, y in zip(train_xs, train_ys):
-                print x.shape, y.shape
+                cur += 1
+                if cur % 100 == 0:
+                    print cur, len(train_xs)
                 avg_cost += train(x, y)
                 total += 1.
 
