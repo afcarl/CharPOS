@@ -48,7 +48,7 @@ def main(num_epochs=NUM_EPOCHS):
     target_values = T.ivector('target_output')
     
     # We now build a layer for the embeddings.
-    U = np.random.randn(vocab_size, char_dims)
+    U = np.random.randn(vocab_size, char_dims).astype('float32')
     embeddings = theano.shared(U, name='embeddings', borrow=True)
     x_embedded = T.dot(x, embeddings)
 
@@ -72,7 +72,7 @@ def main(num_epochs=NUM_EPOCHS):
     #l_backward_slice = lasagne.layers.SliceLayer(l_backward_1, -1, 1).get_output_for(x_embedded)
     # Now combine the LSTM layers.
     
-    _Wf, _Wb = np.random.randn(N_HIDDEN, dim_out), np.random.randn(N_HIDDEN, dim_out)
+    _Wf, _Wb = np.random.randn(N_HIDDEN, dim_out).astype('float32'), np.random.randn(N_HIDDEN, dim_out).astype('float32')
     _bias = np.random.randn(dim_out)
     wf = theano.shared(_Wf, name='join forward weights', borrow=True)
     wb = theano.shared(_Wb, name='join backward weights', borrow=True)
@@ -122,7 +122,7 @@ def main(num_epochs=NUM_EPOCHS):
         return data[0], data[1]
 
     print 'Loading train'
-    train_xs, train_ys = get_data('dev')
+    train_xs, train_ys = get_data('train')
     print 'Loading dev'
     dev_xs, dev_ys = get_data('dev')
     print 'Loading test'
@@ -136,7 +136,7 @@ def main(num_epochs=NUM_EPOCHS):
     def get_accuracy(pXs, pYs):
         total = sum([len(batch) for batch in pXs])
         def transform(x):
-            x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size))
+            x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size),dtype='float32')
             for i in xrange(0, BATCH_SIZE):
                 x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
             return x_input
@@ -151,23 +151,22 @@ def main(num_epochs=NUM_EPOCHS):
             cur = 0
             for x, y in zip(train_xs, train_ys):
                 cur += 1
-                print cur
                 if cur > 2: break
-                if cur % 100 == 0:
+                if cur % 1000 == 0:
                     print cur, len(train_xs)
-                x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size))
+                x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size), dtype='float32')
                 for i in xrange(0, BATCH_SIZE):
                     x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
                 avg_cost += train(x_input, y)
                 total += 1.
-
-            #train_acc = get_accuracy(train_xs, train_ys)
-            train_acc = 0.0
+            train_acc = get_accuracy(train_xs, train_ys)
+            #train_acc = 0.0
             dev_acc = get_accuracy(dev_xs, dev_ys)
             test_acc = get_accuracy(test_xs, test_ys)
 
             print("Epoch {} average loss = {}".format(it, avg_cost / total))
             print "Accuracies:\t train: %f\tdev: %f\ttest: %f\n" % (train_acc, dev_acc, test_acc)        
+            break
     except KeyboardInterrupt:
         pass
 
