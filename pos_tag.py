@@ -43,7 +43,7 @@ def main(num_epochs=NUM_EPOCHS):
     # Recurrent layers expect input of shape
     # (batch size, SEQ_LENGTH, num_features)
 
-    x = T.tensor3('x')
+    x = T.matrix('x')
     # Theano tensor for the targets
     target_values = T.ivector('target_output')
     
