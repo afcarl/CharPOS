@@ -66,10 +66,10 @@ def main(num_epochs=NUM_EPOCHS):
     # We now build the LSTM layer which takes l_in as the input layer
     # We clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients. 
     l_forward_1 = recurrent_type(
-        l_in, N_HIDDEN,#, grad_clipping=GRAD_CLIP,
+        l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh)
     l_backward_1 = recurrent_type(
-        l_in, N_HIDDEN,#, grad_clipping=GRAD_CLIP,
+        l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh,
         backwards=True)
 
@@ -107,7 +107,7 @@ def main(num_epochs=NUM_EPOCHS):
     cost = T.nnet.categorical_crossentropy(network_output,target_values).mean()
 
     # Retrieve all parameters from the network
-    all_params = lasagne.layers.get_all_params(l_out) + [wf, wb, bias, embeddings]
+    all_params = lasagne.layers.get_all_params(l_forward_1) + lasagne.layers.get_all_params(l_backward_1) + lasagne.layers.get_all_params(l_out) + lasagne.la+ [wf, wb, bias, embeddings] 
 
     grads = T.grad(cost, all_params)
     get_grads = theano.function([x, mask, target_values], grads)
