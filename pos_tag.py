@@ -173,9 +173,9 @@ def main(num_epochs=NUM_EPOCHS):
                 #    x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
                 
                 avg_cost += train(x, get_mask(x), y)
-                grads = get_grads(x, get_mask(x), y)
-                with open('grads.pkl', 'wb') as handle:
-                    cPickle.dump(grads, handle)
+                #grads = get_grads(x, get_mask(x), y)
+                #with open('grads.pkl', 'wb') as handle:
+                #    cPickle.dump(grads, handle)
                 total += 1.
             train_acc = get_accuracy(train_xs, train_ys)
             #train_acc = 0.0
