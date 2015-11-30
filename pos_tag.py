@@ -18,7 +18,7 @@ SEQ_LENGTH = 96 #4
 N_HIDDEN = 256
 
 # Optimization learning rate
-LEARNING_RATE = .01
+LEARNING_RATE = .0075
 
 # All gradients above this will be clipped
 GRAD_CLIP = 100
@@ -36,7 +36,7 @@ BATCH_SIZE = 128 #2
 NUM_TAGS = 46 #2
 
 char_dims = 10
-dim_out = 50
+dim_out = 128
 def main(num_epochs=NUM_EPOCHS):
     print "Building network ..."
     # First, we build the network, starting with an input layer
@@ -152,7 +152,7 @@ def main(num_epochs=NUM_EPOCHS):
             cur = 0
             for x, y in zip(train_xs, train_ys):
                 cur += 1
-                if cur > 2: break
+                #if cur > 2: break
                 if cur % 1000 == 0:
                     print cur, len(train_xs)
                 #x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size), dtype='float32')
@@ -167,9 +167,9 @@ def main(num_epochs=NUM_EPOCHS):
 
             print("Epoch {} average loss = {}".format(it, avg_cost / total))
             print "Accuracies:\t train: %f\tdev: %f\ttest: %f\n" % (train_acc, dev_acc, test_acc)        
-            break
+            #break
     except KeyboardInterrupt:
         pass
 
 if __name__ == '__main__':
-    main()
+    main(10)
