@@ -66,10 +66,10 @@ def main(num_epochs=NUM_EPOCHS):
     # We now build the LSTM layer which takes l_in as the input layer
     # We clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients. 
     l_forward_1 = recurrent_type(
-        l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
+        l_in, N_HIDDEN,#, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh)
     l_backward_1 = recurrent_type(
-        l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
+        l_in, N_HIDDEN,#, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh,
         backwards=True)
 
@@ -109,6 +109,8 @@ def main(num_epochs=NUM_EPOCHS):
     # Retrieve all parameters from the network
     all_params = lasagne.layers.get_all_params(l_out) + [wf, wb, bias, embeddings]
 
+    grads = T.grad(cost, all_params)
+    get_grads = theano.function([x, mask, target_values], grads)
     # Compute AdaGrad updates for training
     print("Computing updates ...")
     updates = lasagne.updates.adagrad(cost, all_params, LEARNING_RATE)
@@ -171,6 +173,9 @@ def main(num_epochs=NUM_EPOCHS):
                 #    x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
                 
                 avg_cost += train(x, get_mask(x), y)
+                grads = get_grads(x, get_mask(x), y)
+                with open('grads.pkl', 'wb') as handle:
+                    cPickle.dump(grads, handle)
                 total += 1.
             train_acc = get_accuracy(train_xs, train_ys)
             #train_acc = 0.0
