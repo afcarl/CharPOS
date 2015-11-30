@@ -30,7 +30,7 @@ PRINT_FREQ = 1000
 NUM_EPOCHS = 50
 
 # Batch Size
-BATCH_SIZE = 100 #2
+BATCH_SIZE = 128 #2
 
 # Number of tags
 NUM_TAGS = 46 #2
@@ -122,11 +122,11 @@ def main(num_epochs=NUM_EPOCHS):
         return data[0], data[1]
 
     print 'Loading train'
-    train_xs, train_ys = get_data('train.pkl')
+    train_xs, train_ys = get_data('dev')
     print 'Loading dev'
-    dev_xs, dev_ys = get_data('dev.pkl')
+    dev_xs, dev_ys = get_data('dev')
     print 'Loading test'
-    test_xs, test_ys = get_data('test.pkl')
+    test_xs, test_ys = get_data('test')
     print 'Sizes:\tTrain: %d\tDev: %d\tTest: %d\n' % (len(train_xs) * BATCH_SIZE, len(dev_xs) * BATCH_SIZE, len(test_xs) * BATCH_SIZE)
     #train_xs, train_ys = tmp_xs, tmp_ys
     #dev_xs, dev_ys = tmp_xs, tmp_ys
@@ -135,24 +135,34 @@ def main(num_epochs=NUM_EPOCHS):
 
     def get_accuracy(pXs, pYs):
         total = sum([len(batch) for batch in pXs])
-        errors = sum([count_errors(tx, ty) for tx, ty in zip(pXs, pYs)])
+        def transform(x):
+            x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size))
+            for i in xrange(0, BATCH_SIZE):
+                x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
+            return x_input
+        errors = sum([count_errors(transform(tx), ty) for tx, ty in zip(pXs, pYs)])
         return float(total-errors)/total
 
     print("Training ...")
     try:
         for it in xrange(num_epochs):
-            print x.shape, y.shape
             avg_cost = 0;
             total = 0.
             cur = 0
             for x, y in zip(train_xs, train_ys):
                 cur += 1
+                print cur
+                if cur > 2: break
                 if cur % 100 == 0:
                     print cur, len(train_xs)
-                avg_cost += train(x, y)
+                x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size))
+                for i in xrange(0, BATCH_SIZE):
+                    x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
+                avg_cost += train(x_input, y)
                 total += 1.
 
-            train_acc = get_accuracy(train_xs, train_ys)
+            #train_acc = get_accuracy(train_xs, train_ys)
+            train_acc = 0.0
             dev_acc = get_accuracy(dev_xs, dev_ys)
             test_acc = get_accuracy(test_xs, test_ys)
 
