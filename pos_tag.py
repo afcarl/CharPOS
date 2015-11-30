@@ -66,8 +66,17 @@ def main(num_epochs=NUM_EPOCHS):
         nonlinearity=lasagne.nonlinearities.tanh,
         backwards=True)
 
-    l_forward_slice = l_forward_1.get_output_for([x_embedded, None])[:,-1,:]
-    l_backward_slice = l_backward_1.get_output_for([x_embedded,None])[:,-1,:]
+    l_forward_2 = lasagne.layers.LSTMLayer(
+        l_forward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
+        nonlinearity=lasagne.nonlinearities.tanh)
+    l_backward_2 = lasagne.layers.LSTMLayer(
+        l_backward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
+        nonlinearity=lasagne.nonlinearities.tanh,
+        backwards=True)
+
+
+    l_forward_slice = l_forward_2.get_output_for([x_embedded, None])[:,-1,:]
+    l_backward_slice = l_backward_2.get_output_for([x_embedded,None])[:,-1,:]
 
     #l_forward_slice = lasagne.layers.SliceLayer(l_forward_1, -1, 1).get_output_for(x_embedded)
     #l_backward_slice = lasagne.layers.SliceLayer(l_backward_1, -1, 1).get_output_for(x_embedded)
