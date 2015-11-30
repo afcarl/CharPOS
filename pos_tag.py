@@ -50,7 +50,8 @@ def main(num_epochs=NUM_EPOCHS):
     # We now build a layer for the embeddings.
     U = np.random.randn(vocab_size, char_dims).astype('float32')
     embeddings = theano.shared(U, name='embeddings', borrow=True)
-    x_embedded = T.dot(x, embeddings)
+    #x_embedded = T.dot(x, embeddings)
+    x_embedded = embeddings[x.astype('int32')]
 
     l_in = lasagne.layers.InputLayer(shape=(None, None, char_dims))
     #l_embed = l_in.get_output_for(x_embedded)
@@ -135,12 +136,12 @@ def main(num_epochs=NUM_EPOCHS):
 
     def get_accuracy(pXs, pYs):
         total = sum([len(batch) for batch in pXs])
-        def transform(x):
-            x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size),dtype='float32')
-            for i in xrange(0, BATCH_SIZE):
-                x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
-            return x_input
-        errors = sum([count_errors(transform(tx), ty) for tx, ty in zip(pXs, pYs)])
+        #def transform(x):
+            #x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size),dtype='float32')
+            #for i in xrange(0, BATCH_SIZE):
+            #    x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
+            #return x_input
+        errors = sum([count_errors(tx, ty) for tx, ty in zip(pXs, pYs)])
         return float(total-errors)/total
 
     print("Training ...")
@@ -154,10 +155,10 @@ def main(num_epochs=NUM_EPOCHS):
                 if cur > 2: break
                 if cur % 1000 == 0:
                     print cur, len(train_xs)
-                x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size), dtype='float32')
-                for i in xrange(0, BATCH_SIZE):
-                    x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
-                avg_cost += train(x_input, y)
+                #x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size), dtype='float32')
+                #for i in xrange(0, BATCH_SIZE):
+                #    x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
+                avg_cost += train(x, y)
                 total += 1.
             train_acc = get_accuracy(train_xs, train_ys)
             #train_acc = 0.0
