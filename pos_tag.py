@@ -37,6 +37,11 @@ NUM_TAGS = 46 #2
 
 char_dims = 10
 dim_out = 128
+
+def get_mask(x):
+    mask = np.ones_like(x)
+    mask[np.where(x==0.)] = 0
+    return mask 
 def main(num_epochs=NUM_EPOCHS):
     print "Building network ..."
     # First, we build the network, starting with an input layer
@@ -44,6 +49,7 @@ def main(num_epochs=NUM_EPOCHS):
     # (batch size, SEQ_LENGTH, num_features)
 
     x = T.matrix('x')
+    mask = T.matrix('mask')
     # Theano tensor for the targets
     target_values = T.ivector('target_output')
     
@@ -56,27 +62,28 @@ def main(num_epochs=NUM_EPOCHS):
     l_in = lasagne.layers.InputLayer(shape=(None, None, char_dims))
     #l_embed = l_in.get_output_for(x_embedded)
 
+    recurrent_type = lasagne.layers.RecurrentLayer
     # We now build the LSTM layer which takes l_in as the input layer
     # We clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients. 
-    l_forward_1 = lasagne.layers.LSTMLayer(
+    l_forward_1 = recurrent_type(
         l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh)
-    l_backward_1 = lasagne.layers.LSTMLayer(
+    l_backward_1 = recurrent_type(
         l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh,
         backwards=True)
 
-    l_forward_2 = lasagne.layers.LSTMLayer(
-        l_forward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
-        nonlinearity=lasagne.nonlinearities.tanh)
-    l_backward_2 = lasagne.layers.LSTMLayer(
-        l_backward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
-        nonlinearity=lasagne.nonlinearities.tanh,
-        backwards=True)
+    # l_forward_2 = recurrent_type(
+    #     l_forward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
+    #     nonlinearity=lasagne.nonlinearities.tanh)
+    # l_backward_2 = recurrent_type(
+    #     l_backward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
+    #     nonlinearity=lasagne.nonlinearities.tanh,
+    #     backwards=True)
 
 
-    l_forward_slice = l_forward_2.get_output_for([x_embedded, None])[:,-1,:]
-    l_backward_slice = l_backward_2.get_output_for([x_embedded,None])[:,-1,:]
+    l_forward_slice = l_forward_1.get_output_for([x_embedded, mask])[:,-1,:]
+    l_backward_slice = l_backward_1.get_output_for([x_embedded, mask])[:,-1,:]
 
     #l_forward_slice = lasagne.layers.SliceLayer(l_forward_1, -1, 1).get_output_for(x_embedded)
     #l_backward_slice = lasagne.layers.SliceLayer(l_backward_1, -1, 1).get_output_for(x_embedded)
@@ -108,8 +115,8 @@ def main(num_epochs=NUM_EPOCHS):
 
     # Theano functions for training and computing cost
     print("Compiling functions ...")
-    train = theano.function([x, target_values], cost, updates=updates, allow_input_downcast=True)
-    compute_cost = theano.function([x, target_values], cost, allow_input_downcast=True)
+    train = theano.function([x, mask, target_values], cost, updates=updates, allow_input_downcast=True)
+    compute_cost = theano.function([x, mask, target_values], cost, allow_input_downcast=True)
 
     # In order to generate text from the network, we need the probability distribution of the next character given
     # the state of the network and the input (a seed).
@@ -118,7 +125,7 @@ def main(num_epochs=NUM_EPOCHS):
     pred = T.argmax(network_output, axis=1)
     errors = T.sum(T.neq(pred, target_values))
 
-    count_errors = theano.function([x, target_values], errors, allow_input_downcast=True)
+    count_errors = theano.function([x, mask, target_values], errors, allow_input_downcast=True)
     # The next function generates text given a phrase of length at least SEQ_LENGTH.
     # The phrase is set using the variable generation_phrase.
     # The optional input "N" is used to set the number of characters of text to predict. 
@@ -145,12 +152,7 @@ def main(num_epochs=NUM_EPOCHS):
 
     def get_accuracy(pXs, pYs):
         total = sum([len(batch) for batch in pXs])
-        #def transform(x):
-            #x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size),dtype='float32')
-            #for i in xrange(0, BATCH_SIZE):
-            #    x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
-            #return x_input
-        errors = sum([count_errors(tx, ty) for tx, ty in zip(pXs, pYs)])
+        errors = sum([count_errors(tx, get_mask(tx), ty) for tx, ty in zip(pXs, pYs)])
         return float(total-errors)/total
 
     print("Training ...")
@@ -167,7 +169,8 @@ def main(num_epochs=NUM_EPOCHS):
                 #x_input = np.zeros((BATCH_SIZE, SEQ_LENGTH, vocab_size), dtype='float32')
                 #for i in xrange(0, BATCH_SIZE):
                 #    x_input[i, np.arange(SEQ_LENGTH).astype('int32'), x[i,:].astype('int32')] = 1.
-                avg_cost += train(x, y)
+                
+                avg_cost += train(x, get_mask(x), y)
                 total += 1.
             train_acc = get_accuracy(train_xs, train_ys)
             #train_acc = 0.0
