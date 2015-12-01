@@ -62,7 +62,7 @@ def main(num_epochs=NUM_EPOCHS):
     l_in = lasagne.layers.InputLayer(shape=(None, None, char_dims))
 
 
-    recurrent_type = lasagne.layers.RecurrentLayer
+    recurrent_type = lasagne.layers.LSTMLayer
     # We now build the LSTM layer which takes l_in as the input layer
     # We clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients. 
     l_forward_1 = recurrent_type(
