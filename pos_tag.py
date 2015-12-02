@@ -4,6 +4,9 @@ import theano.tensor as T
 import theano.printing as printing
 import lasagne
 import cPickle
+import lasagne.layers.helper as helper
+import random
+
 #This snippet loads the text file and creates dictionaries to 
 #encode characters into a vector-space representation and vice-versa. 
 
@@ -18,7 +21,7 @@ SEQ_LENGTH = 96 #4
 N_HIDDEN = 256
 
 # Optimization learning rate
-LEARNING_RATE = .1
+LEARNING_RATE = 0.1
 
 # All gradients above this will be clipped
 GRAD_CLIP = 100
@@ -43,7 +46,7 @@ def get_mask(x):
     mask[np.where(x==0.)] = 0
     return mask 
 
-def main(num_epochs=NUM_EPOCHS):
+def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
     print "Building network ..."
     # First, we build the network, starting with an input layer
     # Recurrent layers expect input of shape
@@ -73,12 +76,23 @@ def main(num_epochs=NUM_EPOCHS):
         nonlinearity=lasagne.nonlinearities.tanh,
         backwards=True)
 
-    l_forward_slice = l_forward_1.get_output_for([x_embedded, mask])[:,-1,:]
-    l_backward_slice = l_backward_1.get_output_for([x_embedded, mask])[:,-1,:]
+    if layers == 2:
+        l_forward_2 = recurrent_type(
+            l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
+            nonlinearity=lasagne.nonlinearities.tanh)
+        l_backward_2 = recurrent_type(
+            l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
+            nonlinearity=lasagne.nonlinearities.tanh,
+            backwards=True)
+        l_forward_slice = l_forward_2.get_output_for([x_embedded, mask])[:,-1,:]
+        l_backward_slice = l_backward_2.get_output_for([x_embedded, mask])[:,-1,:]
+    else:
+        l_forward_slice = l_forward_1.get_output_for([x_embedded, mask])[:,-1,:]
+        l_backward_slice = l_backward_1.get_output_for([x_embedded, mask])[:,-1,:]
 
     # Now combine the LSTM layers.  
     _Wf, _Wb = np.random.randn(N_HIDDEN, dim_out).astype('float32'), np.random.randn(N_HIDDEN, dim_out).astype('float32')
-    _bias = np.random.randn(dim_out)
+    _bias = np.random.randn(dim_out).astype('float32')
     wf = theano.shared(_Wf, name='join forward weights', borrow=True)
     wb = theano.shared(_Wb, name='join backward weights', borrow=True)
     bias = theano.shared(_bias, name='join bias', borrow=True)
@@ -130,11 +144,23 @@ def main(num_epochs=NUM_EPOCHS):
         errors = sum([count_errors(tx, get_mask(tx), ty) for tx, ty in zip(pXs, pYs)])
         return float(total-errors)/total
 
+    if not load_file is None:
+        print 'Loading params...'
+        with open(load_file, 'rb') as handle:
+            params = cPickle.load(handle)
+        print len(params)
+        for ix, _ in enumerate(zip(params, all_params)):
+            all_params[ix].set_value(params[ix].astype('float32'))
+
     print("Training ...")
     try:
-        model_name = 'LSTM_0.1_100'
+        model_name = 'LSTM_%d' % layers
         best_acc = 0.0
         for it in xrange(num_epochs):
+            data = zip(train_xs, train_ys)
+            random.shuffle(data)
+            train_xs, train_ys = zip(*data)
+
             avg_cost = 0;
             total = 0.
             cur = 0
@@ -143,20 +169,24 @@ def main(num_epochs=NUM_EPOCHS):
                 avg_cost += train(x, get_mask(x), y)
                 total += 1.
 
-            train_acc = get_accuracy(train_xs, train_ys)
-            dev_acc = get_accuracy(dev_xs, dev_ys)
+            train_acc = 0.
+            #train_acc = get_accuracy(train_xs, train_ys)
+            dev_acc = get_accuracy(dev_xs[55:60], dev_ys[55:60])
             test_acc = get_accuracy(test_xs, test_ys)
 
             if dev_acc > best_acc:
                 params = [np.asarray(p.eval()) for p in all_params]
-                with open('%s_%f.pkl' % model_name, dev_acc, 'wb') as handle:
+                with open('%s_%f.pkl' % (model_name, dev_acc), 'wb') as handle:
                     cPickle.dump(params, handle)
                 best_acc = dev_acc
 
             print("Epoch {} average loss = {}".format(it, avg_cost / total))
-            print "Accuracies:\t train: %f\tdev: %f\ttest: %f\n" % (train_acc, dev_acc, test_acc)        
+            print "Accuracies:\t train: %f\tdev: %f\ttest: %f\n" % (train_acc, dev_acc, test_acc) 
+     
     except KeyboardInterrupt:
         pass
 
+import sys
 if __name__ == '__main__':
-    main(10)
+    f = sys.argv[1]
+    main(10, load_file=f)
