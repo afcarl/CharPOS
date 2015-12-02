@@ -78,10 +78,10 @@ def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
 
     if layers == 2:
         l_forward_2 = recurrent_type(
-            l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
+            l_forward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
             nonlinearity=lasagne.nonlinearities.tanh)
         l_backward_2 = recurrent_type(
-            l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
+            l_backward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
             nonlinearity=lasagne.nonlinearities.tanh,
             backwards=True)
         l_forward_slice = l_forward_2.get_output_for([x_embedded, mask])[:,-1,:]
@@ -107,7 +107,9 @@ def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
     cost = T.nnet.categorical_crossentropy(network_output,target_values).mean()
 
     # Retrieve all parameters from the network
-    all_params = lasagne.layers.get_all_params(l_forward_1) + lasagne.layers.get_all_params(l_backward_1) + lasagne.layers.get_all_params(l_out) + [wf, wb, bias, embeddings] 
+    #all_params = lasagne.layers.get_all_params(l_forward_1) + lasagne.layers.get_all_params(l_backward_1) + lasagne.layers.get_all_params(l_out) + [wf, wb, bias, embeddings] 
+    all_params = helper.get_all_params(l_backward_2) + helper.get_all_params(l_forward_2) + helper.get_all_params(l_out) + [wf, wb, bias, embeddings] 
+    #print len(all_params)
 
     grads = T.grad(cost, all_params)
     get_grads = theano.function([x, mask, target_values], grads)
@@ -189,4 +191,4 @@ def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
 import sys
 if __name__ == '__main__':
     f = sys.argv[1]
-    main(10, load_file=f)
+    main(10, layers=2)
