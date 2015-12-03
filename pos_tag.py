@@ -3,6 +3,9 @@ import theano
 import theano.tensor as T
 import theano.printing as printing
 import lasagne
+import cPickle
+import lasagne.layers.helper as helper
+import random
 
 #This snippet loads the text file and creates dictionaries to 
 #encode characters into a vector-space representation and vice-versa. 
@@ -18,7 +21,7 @@ SEQ_LENGTH = 96 #4
 N_HIDDEN = 256
 
 # Optimization learning rate
-LEARNING_RATE = .01
+LEARNING_RATE = 0.1
 
 # All gradients above this will be clipped
 GRAD_CLIP = 100
@@ -30,50 +33,71 @@ PRINT_FREQ = 1000
 NUM_EPOCHS = 50
 
 # Batch Size
-BATCH_SIZE = 100 #2
+BATCH_SIZE = 128 #2
 
 # Number of tags
 NUM_TAGS = 46 #2
 
 char_dims = 10
-dim_out = 50
-def main(num_epochs=NUM_EPOCHS):
+dim_out = 128
+
+def get_mask(x):
+    mask = np.ones_like(x)
+    mask[np.where(x==0.)] = 0
+    return mask 
+
+def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
     print "Building network ..."
+    print theano.config.floatX
     # First, we build the network, starting with an input layer
     # Recurrent layers expect input of shape
     # (batch size, SEQ_LENGTH, num_features)
 
-    x = T.tensor3('x')
-    # Theano tensor for the targets
+    x = T.imatrix('x')
+    mask = T.matrix('mask')
     target_values = T.ivector('target_output')
     
     # We now build a layer for the embeddings.
-    U = np.random.randn(vocab_size, char_dims)
+    U = np.random.randn(vocab_size, char_dims).astype(theano.config.floatX)
     embeddings = theano.shared(U, name='embeddings', borrow=True)
-    x_embedded = T.dot(x, embeddings)
+    x_embedded = embeddings[x]
 
-    l_in = lasagne.layers.InputLayer(shape=(None, None, char_dims))
-    #l_embed = l_in.get_output_for(x_embedded)
+    l_in = lasagne.layers.InputLayer(shape=(BATCH_SIZE, SEQ_LENGTH, char_dims), input_var=x_embedded)
+    l_mask = lasagne.layers.InputLayer(shape=(BATCH_SIZE, SEQ_LENGTH), input_var=mask)
 
-    # We now build the LSTM layer which takes l_in as the input layer
-    # We clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients. 
-    l_forward_1 = lasagne.layers.LSTMLayer(
-        l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
-        nonlinearity=lasagne.nonlinearities.tanh)
-    l_backward_1 = lasagne.layers.LSTMLayer(
-        l_in, N_HIDDEN, grad_clipping=GRAD_CLIP,
+    recurrent_type = lasagne.layers.LSTMLayer
+    l_forward_1 = recurrent_type(l_in, N_HIDDEN, 
+        grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh,
-        backwards=True)
+        mask_input=l_mask)
+    l_backward_1 = recurrent_type(l_in, N_HIDDEN, 
+        grad_clipping=GRAD_CLIP,
+        nonlinearity=lasagne.nonlinearities.tanh,
+        backwards=True, 
+        mask_input=l_mask)
+    if layers == 2:
+        l_forward_2 = recurrent_type(l_forward_1, N_HIDDEN, 
+            grad_clipping=GRAD_CLIP,
+            nonlinearity=lasagne.nonlinearities.tanh,
+            only_return_final=True, 
+            mask_input=l_mask)
+        l_backward_2 = recurrent_type(l_backward_1, N_HIDDEN, 
+            grad_clipping=GRAD_CLIP,
+            nonlinearity=lasagne.nonlinearities.tanh,
+            backwards=True, 
+            only_return_final=True, 
+            mask_input=l_mask)
+        l_forward_slice = lasagne.layers.get_output(l_forward_2)
+        l_backward_slice = lasagne.layers.get_output(l_backward_2)
+    else:
+        #l_forward_slice = l_forward_1.get_output_for([x_embedded, mask])[:,-1,:]
+        #l_backward_slice = l_backward_1.get_output_for([x_embedded, mask])[:,-1,:]
+        l_forward_slice = lasagne.layers.get_output(l_forward_1)[:,-1,:]
+        l_backward_slice = lasagne.layers.get_output(l_backward_1)[:,-1,:]
 
-    l_forward_slice = l_forward_1.get_output_for([x_embedded, None])[:,-1,:]
-    l_backward_slice = l_backward_1.get_output_for([x_embedded,None])[:,-1,:]
-
-    #l_forward_slice = lasagne.layers.SliceLayer(l_forward_1, -1, 1).get_output_for(x_embedded)
-    #l_backward_slice = lasagne.layers.SliceLayer(l_backward_1, -1, 1).get_output_for(x_embedded)
-    # Now combine the LSTM layers.
-    
-    _Wf, _Wb = np.random.randn(N_HIDDEN, dim_out), np.random.randn(N_HIDDEN, dim_out)
-    _bias = np.random.randn(dim_out)
+    # Now combine the LSTM layers.  
+    _Wf, _Wb = np.random.randn(N_HIDDEN, dim_out).astype(theano.config.floatX), np.random.randn(N_HIDDEN, dim_out).astype(theano.config.floatX)
+    _bias = np.random.randn(dim_out).astype(theano.config.floatX)
     wf = theano.shared(_Wf, name='join forward weights', borrow=True)
     wb = theano.shared(_Wb, name='join backward weights', borrow=True)
     bias = theano.shared(_bias, name='join bias', borrow=True)
@@ -84,13 +108,19 @@ def main(num_epochs=NUM_EPOCHS):
 
     # lasagne.layers.get_output produces a variable for the output of the net
     network_output = l_out.get_output_for(joined)
-    #show_output = printing.Print('show_pred')(network_output)
-    #show_target = printing.Print('show_target')(target_values)
     # The loss function is calculated as the mean of the (categorical) cross-entropy between the prediction and target.
     cost = T.nnet.categorical_crossentropy(network_output,target_values).mean()
 
     # Retrieve all parameters from the network
-    all_params = lasagne.layers.get_all_params(l_out) + [wf, wb, bias, embeddings]
+    if layers == 1:
+        all_params = helper.get_all_params(l_forward_1) + helper.get_all_params(l_backward_1) 
+    else:
+        all_params = helper.get_all_params(l_forward_2) + helper.get_all_params(l_backward_2) 
+    all_params += helper.get_all_params(l_out) + [wf, wb, bias, embeddings] 
+    print len(all_params)
+
+    grads = T.grad(cost, all_params)
+    get_grads = theano.function([x, mask, target_values], grads)
 
     # Compute AdaGrad updates for training
     print("Computing updates ...")
@@ -98,68 +128,75 @@ def main(num_epochs=NUM_EPOCHS):
 
     # Theano functions for training and computing cost
     print("Compiling functions ...")
-    train = theano.function([x, target_values], cost, updates=updates, allow_input_downcast=True)
-    compute_cost = theano.function([x, target_values], cost, allow_input_downcast=True)
-
-    # In order to generate text from the network, we need the probability distribution of the next character given
-    # the state of the network and the input (a seed).
-    # In order to produce the probability distribution of the prediction, we compile a function called probs. 
+    train = theano.function([x, mask, target_values], cost, updates=updates, allow_input_downcast=True)
+    compute_cost = theano.function([x, mask, target_values], cost, allow_input_downcast=True) 
     
     pred = T.argmax(network_output, axis=1)
     errors = T.sum(T.neq(pred, target_values))
+    count_errors = theano.function([x, mask, target_values], errors, allow_input_downcast=True)
 
-    count_errors = theano.function([x, target_values], errors, allow_input_downcast=True)
-    # The next function generates text given a phrase of length at least SEQ_LENGTH.
-    # The phrase is set using the variable generation_phrase.
-    # The optional input "N" is used to set the number of characters of text to predict. 
-    
-    #tmp_xs = [np.array([[[1,0,0], [1,0,0], [0,1,0], [0,1,0]], [[1,0,0],[0,0,1],[0,0,1],[1,0,0]]], dtype='float32'), np.array([[[0,1,0],[0,1,0],[0,1,0],[0,1,0]], [[1,0,0],[0,0,1],[1,0,0],[0,0,1]]], dtype='float32')]
-    #tmp_ys = [np.array([0, 1], dtype='int32'), np.array([1, 0], dtype='int32')]
     def get_data(fname):
         import cPickle
         with open(fname, 'rb') as handle:
             data = cPickle.load(handle)
-        return data[0], data[1]
+        xs = [d.astype('int32') for d in data[0]]
+        return xs, data[1]
 
     print 'Loading train'
-    train_xs, train_ys = get_data('train.pkl')
+    train_xs, train_ys = get_data('train')
     print 'Loading dev'
-    dev_xs, dev_ys = get_data('dev.pkl')
+    dev_xs, dev_ys = get_data('dev')
     print 'Loading test'
-    test_xs, test_ys = get_data('test.pkl')
+    test_xs, test_ys = get_data('test')
     print 'Sizes:\tTrain: %d\tDev: %d\tTest: %d\n' % (len(train_xs) * BATCH_SIZE, len(dev_xs) * BATCH_SIZE, len(test_xs) * BATCH_SIZE)
-    #train_xs, train_ys = tmp_xs, tmp_ys
-    #dev_xs, dev_ys = tmp_xs, tmp_ys
-    #test_xs, test_ys = tmp_xs, tmp_ys
 
 
     def get_accuracy(pXs, pYs):
         total = sum([len(batch) for batch in pXs])
-        errors = sum([count_errors(tx, ty) for tx, ty in zip(pXs, pYs)])
+        errors = sum([count_errors(tx, get_mask(tx), ty) for tx, ty in zip(pXs, pYs)])
         return float(total-errors)/total
+
+    if not load_file is None:
+        print 'Loading params...'
+        with open(load_file, 'rb') as handle:
+            params = cPickle.load(handle)
+        print len(params)
+        for ix, _ in enumerate(zip(params, all_params)):
+            all_params[ix].set_value(params[ix].astype('float32'))
 
     print("Training ...")
     try:
+        model_name = 'LSTM_%d_%f_%d' % (layers, LEARNING_RATE, GRAD_CLIP)
+        best_acc = 50.0
         for it in xrange(num_epochs):
-            print x.shape, y.shape
+            data = zip(train_xs, train_ys)
+            random.shuffle(data)
+            train_xs, train_ys = zip(*data)
+
             avg_cost = 0;
             total = 0.
-            cur = 0
-            for x, y in zip(train_xs, train_ys):
-                cur += 1
-                if cur % 100 == 0:
-                    print cur, len(train_xs)
-                avg_cost += train(x, y)
+            for x, y in zip(train_xs, train_ys):          
+                avg_cost += train(x, get_mask(x), y)
                 total += 1.
 
-            train_acc = get_accuracy(train_xs, train_ys)
+            train_acc = 0.
+            #train_acc = get_accuracy(train_xs, train_ys)
             dev_acc = get_accuracy(dev_xs, dev_ys)
             test_acc = get_accuracy(test_xs, test_ys)
 
+            if dev_acc > best_acc:
+                params = [np.asarray(p.eval()) for p in all_params]
+                with open('%s_%f.pkl' % (model_name, dev_acc), 'wb') as handle:
+                    cPickle.dump(params, handle)
+                best_acc = dev_acc
+
             print("Epoch {} average loss = {}".format(it, avg_cost / total))
-            print "Accuracies:\t train: %f\tdev: %f\ttest: %f\n" % (train_acc, dev_acc, test_acc)        
+            print "Accuracies:\t train: %f\tdev: %f\ttest: %f\n" % (train_acc, dev_acc, test_acc) 
+            print 
     except KeyboardInterrupt:
         pass
 
+import sys
 if __name__ == '__main__':
-    main()
+    f = sys.argv[1]
+    main(10, layers=1, load_file=f)
