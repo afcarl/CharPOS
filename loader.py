@@ -7,9 +7,12 @@ from nltk.corpus import ptb
 import numpy as np
 import cPickle as pyk
 
-BATCH_SIZE = 128 # Number of examples in a batch
-SEQUENCE_SIZE = 96 # Number of characters in an example
-CONTEXT = 2 # Number of context words to include
+BATCH_SIZE = 256 # Number of examples in a batch
+SEQUENCE_SIZE = 32 # Number of characters in an example
+CONTEXT = 0 # Number of context words to include
+SHUFFLE = True # Whether to shuffle examples within a batch
+
+BUCKETS = {}
 
 CHARS = [u'~', u'!', u'#', u'$', u'%', u'&', u"'", u'*', u',', u'-', u'.', 
 		u'/', u'0', u'1', u'2', u'3', u'4', u'5', u'6', u'7', u'8', u'9', u':',
@@ -38,19 +41,31 @@ DEV_SCTS = ['19', '20', '21']
 TEST_SCTS = ['22', '23', '24']
 
 def get_example(sent, i):
+	global BUCKETS
+
 	s = max(i - CONTEXT, 0)
 	before = " ".join([w for w, _ in sent[s:i]])
 	after = " ".join([w for w, _ in sent[i+1:i+1+CONTEXT]])
 	sequence = before + "{" + sent[i][0] + "}" + after
 	tag = sent[i][1]
 	
-	# Squish within the sequence size (either cut if it's too much,
-	# or pad with ~'s otherwise)
-	sequence = sequence[:SEQUENCE_SIZE]
+	print sequence
+	exit()
+#	if len(sequence) > 24:
+#		if len(sequence) not in BUCKETS:
+#			BUCKETS[len(sequence)] = [sequence]
+#		else:
+#			BUCKETS[len(sequence)].append(sequence)
+	
+	# Squish within the sequence size (cut if it's too much and pad)
+	if len(sequence) > SEQUENCE_SIZE:
+		off = int(round((len(sequence) - SEQUENCE_SIZE) / float(2)))
+		sequence = sequence[off:len(sequence) - off]
+	
 	sequence = sequence + ('~' * (SEQUENCE_SIZE - len(sequence)))
 	
 	# One example: (seq_size vector, scalar)
-	return (np.array([C_TO_I[c] for c in sequence]), T_TO_I[tag])
+	return (np.array([C_TO_I[c] for c in sequence], dtype=np.float32), T_TO_I[tag])
 
 def empty_example():
 	x = np.zeros(shape=(SEQUENCE_SIZE,), dtype=np.float32)
@@ -100,20 +115,31 @@ def get_batches(scts):
 		
 	raise StopIteration
 
+def shuffle_batch(x, y):
+	#See stackoverflow.com/q/4601373 for justification
+	rng_state = np.random.get_state()
+	np.random.shuffle(x)
+	np.random.set_state(rng_state)
+	np.random.shuffle(y)
+
 def write_set(name, scts):
-	
 	all_x = []
 	all_y = []
 	for x, y in get_batches(scts):
+		if SHUFFLE:
+			shuffle_batch(x, y)
 		all_x.append(x)
 		all_y.append(y)
 		
-	f = open(name, "wb")
+	f = open(name + ".set", "wb")
 	pyk.dump((all_x, all_y), f)
 	f.close()
 
 if __name__ == '__main__':
-	write_set("train", TRAIN_SCTS)
-	write_set("dev", DEV_SCTS)
-	write_set("test", TEST_SCTS)
+	params = ("ctx" + str(CONTEXT) + "_b" + str(BATCH_SIZE) + 
+			"_sq" + str(SEQUENCE_SIZE) + "_sh" + str(SHUFFLE))
+	write_set("train_" + params, TRAIN_SCTS)
+	write_set("dev_" + params, DEV_SCTS)
+	write_set("test_" + params, TEST_SCTS)
 	
+	#print BUCKETS
