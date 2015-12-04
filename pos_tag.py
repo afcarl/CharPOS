@@ -21,7 +21,7 @@ N_HIDDEN = 256
 LEARNING_RATE = 0.1
 
 # All gradients above this will be clipped
-GRAD_CLIP = 100
+GRAD_CLIP = False
 
 # Number of tags
 NUM_TAGS = 46 #2
@@ -68,16 +68,14 @@ def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, su
         l_forward_2 = recurrent_type(l_forward_1, N_HIDDEN, 
             grad_clipping=GRAD_CLIP,
             nonlinearity=lasagne.nonlinearities.tanh,
-            only_return_final=True, 
             mask_input=l_mask)
         l_backward_2 = recurrent_type(l_backward_1, N_HIDDEN, 
             grad_clipping=GRAD_CLIP,
             nonlinearity=lasagne.nonlinearities.tanh,
             backwards=True, 
-            only_return_final=True, 
             mask_input=l_mask)
-        l_forward_slice = lasagne.layers.get_output(l_forward_2)
-        l_backward_slice = lasagne.layers.get_output(l_backward_2)
+        l_forward_slice = lasagne.layers.get_output(l_forward_2)[:,-1,:]
+        l_backward_slice = lasagne.layers.get_output(l_backward_2)[:,-1,:]
     else:
         l_forward_slice = lasagne.layers.get_output(l_forward_1)[:,-1,:]
         l_backward_slice = lasagne.layers.get_output(l_backward_1)[:,-1,:]
@@ -111,7 +109,7 @@ def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, su
 
     # Compute AdaGrad updates for training
     print("Computing updates ...")
-    updates = lasagne.updates.adagrad(cost, all_params, LEARNING_RATE)
+    updates = lasagne.updates.adam(cost, all_params)
 
     # Theano functions for training and computing cost
     print("Compiling functions ...")
