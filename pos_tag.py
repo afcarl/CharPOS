@@ -34,6 +34,9 @@ def get_mask(x):
     mask[np.where(x==0.)] = 0
     return mask 
 
+def str2bool(v):
+  return v.lower() in ("yes", "true", "t", "1")
+
 def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, suffix='', test=False, model_name='model'):
     print "Building network ..."
     print theano.config.floatX
@@ -191,7 +194,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_recurrent_layers', type=int, default=1, help='How many recurrent layers to stack.')
     parser.add_argument('--load_file', type=str, default=None, help='File to load parameters from.')
     parser.add_argument('--test', type='bool', default=False, help='Whether or not to just test the code.')
-    parser.add_argument('--suffix', type=str, default=False, help='Suffix for the data files to load.')
+    parser.add_argument('--suffix', type=str, default='', help='Suffix for the data files to load.')
     parser.add_argument('--seq_len', type=int, help='Length of the longest sequence.')
     parser.add_argument('--batch_size', type=int, help='Size of the batches in the dataset.')
     parser.add_argument('--model_name', type=str, help='Name of which to save the model.')
