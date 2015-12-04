@@ -202,7 +202,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print "args: ", args
     f = sys.argv[1]
-    main(num_epochs=n_epochs, 
+    main(num_epochs=args.n_epochs, 
         layers=args.n_recurrent_layers, 
         load_file=args.load_file, 
         suffix=args.suffix,
