@@ -202,7 +202,7 @@ if __name__ == '__main__':
     main(num_epochs=n_epochs, 
         layers=args.n_recurrent_layers, 
         load_file=args.load_file, 
-        suffix=args.suffix
+        suffix=args.suffix,
         test=args.test,
         seq_len=args.seq_len,
         batch_size=args.batch_size,
