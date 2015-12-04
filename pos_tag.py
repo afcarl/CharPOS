@@ -6,16 +6,13 @@ import lasagne
 import cPickle
 import lasagne.layers.helper as helper
 import random
-
-#This snippet loads the text file and creates dictionaries to 
-#encode characters into a vector-space representation and vice-versa. 
+import argparse
+import sys
 
 #Lasagne Seed for Reproducibility
 lasagne.random.set_rng(np.random.RandomState(1))
 
 vocab_size = 84 #3
-# Sequence Length
-SEQ_LENGTH = 96 #4
 
 # Number of units in the two hidden (LSTM) layers
 N_HIDDEN = 256
@@ -25,15 +22,6 @@ LEARNING_RATE = 0.1
 
 # All gradients above this will be clipped
 GRAD_CLIP = 100
-
-# How often should we check the output?
-PRINT_FREQ = 1000
-
-# Number of epochs to train the net
-NUM_EPOCHS = 50
-
-# Batch Size
-BATCH_SIZE = 128 #2
 
 # Number of tags
 NUM_TAGS = 46 #2
@@ -46,13 +34,14 @@ def get_mask(x):
     mask[np.where(x==0.)] = 0
     return mask 
 
-def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
+def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, suffix='', test=False, model_name='model'):
     print "Building network ..."
     print theano.config.floatX
-    # First, we build the network, starting with an input layer
-    # Recurrent layers expect input of shape
-    # (batch size, SEQ_LENGTH, num_features)
 
+    BATCH_SIZE = batch_size
+    SEQ_LENGTH = seq_len
+
+    # Recurrent layers expect input of shape (batch size, SEQ_LENGTH, num_features)
     x = T.imatrix('x')
     mask = T.matrix('mask')
     target_values = T.ivector('target_output')
@@ -90,8 +79,6 @@ def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
         l_forward_slice = lasagne.layers.get_output(l_forward_2)
         l_backward_slice = lasagne.layers.get_output(l_backward_2)
     else:
-        #l_forward_slice = l_forward_1.get_output_for([x_embedded, mask])[:,-1,:]
-        #l_backward_slice = l_backward_1.get_output_for([x_embedded, mask])[:,-1,:]
         l_forward_slice = lasagne.layers.get_output(l_forward_1)[:,-1,:]
         l_backward_slice = lasagne.layers.get_output(l_backward_1)[:,-1,:]
 
@@ -143,11 +130,11 @@ def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
         return xs, data[1]
 
     print 'Loading train'
-    train_xs, train_ys = get_data('train')
+    train_xs, train_ys = get_data('train%s' % suffix)
     print 'Loading dev'
-    dev_xs, dev_ys = get_data('dev')
+    dev_xs, dev_ys = get_data('dev%s' % suffix)
     print 'Loading test'
-    test_xs, test_ys = get_data('test')
+    test_xs, test_ys = get_data('test%s' % suffix)
     print 'Sizes:\tTrain: %d\tDev: %d\tTest: %d\n' % (len(train_xs) * BATCH_SIZE, len(dev_xs) * BATCH_SIZE, len(test_xs) * BATCH_SIZE)
 
 
@@ -166,8 +153,12 @@ def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
 
     print("Training ...")
     try:
-        model_name = 'LSTM_%d_%f_%d' % (layers, LEARNING_RATE, GRAD_CLIP)
-        best_acc = 50.0
+        if test:
+            dev_acc = get_accuracy(dev_xs, dev_ys)
+            print dev_acc
+            return
+
+        best_acc = 0.0
         for it in xrange(num_epochs):
             data = zip(train_xs, train_ys)
             random.shuffle(data)
@@ -196,7 +187,25 @@ def main(num_epochs=NUM_EPOCHS, layers=1, load_file=None):
     except KeyboardInterrupt:
         pass
 
-import sys
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.register('type','bool',str2bool)
+    parser.add_argument('--n_recurrent_layers', type=int, default=1, help='How many recurrent layers to stack.')
+    parser.add_argument('--load_file', type=str, default=None, help='File to load parameters from.')
+    parser.add_argument('--test', type='bool', default=False, help='Whether or not to just test the code.')
+    parser.add_argument('--suffix', type=str, default=False, help='Suffix for the data files to load.')
+    parser.add_argument('--seq_len', type=int, help='Length of the longest sequence.')
+    parser.add_argument('--batch_size', type=int, help='Size of the batches in the dataset.')
+    parser.add_argument('--model_name', type=str, help='Name of which to save the model.')
+    parser.add_argument('--n_epochs', type=int, default=10, help='How long to run training.')
+    args = parser.parse_args()
+    print "args: ", args
     f = sys.argv[1]
-    main(10, layers=1, load_file=f)
+    main(num_epochs=n_epochs, 
+        layers=args.n_recurrent_layers, 
+        load_file=args.load_file, 
+        suffix=args.suffix
+        test=args.test,
+        seq_len=args.seq_len,
+        batch_size=args.batch_size,
+        model_name=args.model_name)
