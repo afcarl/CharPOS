@@ -120,7 +120,7 @@ def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, su
     compute_cost = theano.function([x, mask, target_values], cost, allow_input_downcast=True) 
     
     pred = T.argmax(network_output, axis=1)
-    get_preds = theano.function([x, mask, target_values], pred, allow_input_downcast=True)
+    get_preds = theano.function([x, mask], pred, allow_input_downcast=True)
 
     errors = T.sum(T.neq(pred, target_values))
     count_errors = theano.function([x, mask, target_values], errors, allow_input_downcast=True)
@@ -147,7 +147,7 @@ def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, su
         return float(total-errors)/total
 
     def save_preds(pXs, pYs):
-        preds = [get_preds(tx, get_mask(tx), ty) for tx, ty in zip(pXs, pYs)]
+        preds = [get_preds(tx, get_mask(tx)) for tx, _ in zip(pXs, pYs)]
         with open('pred.pkl', 'wb') as handle:
             handle.dump(preds, handle)
 
