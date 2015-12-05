@@ -120,6 +120,8 @@ def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, su
     compute_cost = theano.function([x, mask, target_values], cost, allow_input_downcast=True) 
     
     pred = T.argmax(network_output, axis=1)
+    get_preds = theano.function([x, mask, target_values], pred, allow_input_downcast=True)
+
     errors = T.sum(T.neq(pred, target_values))
     count_errors = theano.function([x, mask, target_values], errors, allow_input_downcast=True)
 
@@ -144,6 +146,11 @@ def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, su
         errors = sum([count_errors(tx, get_mask(tx), ty) for tx, ty in zip(pXs, pYs)])
         return float(total-errors)/total
 
+    def save_preds(pXs, pYs):
+        preds = [get_preds(tx, get_mask(tx), ty) for tx, ty in zip(pXs, pYs)]
+        with open('pred.pkl', 'wb') as handle:
+            handle.dump(preds, handle)
+
     if not load_file is None:
         print 'Loading params...'
         with open(load_file, 'rb') as handle:
@@ -156,6 +163,7 @@ def main(num_epochs=10, layers=1, load_file=None, batch_size=128, seq_len=96, su
     try:
         if test:
             dev_acc = get_accuracy(dev_xs, dev_ys)
+            save_preds(dev_xs, dev_ys)
             print dev_acc
             return
 
