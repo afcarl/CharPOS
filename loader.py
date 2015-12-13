@@ -6,13 +6,13 @@ Frederic Lafrance, Michael Noseworthy
 from nltk.corpus import ptb
 import numpy as np
 import cPickle as pyk
+import models_common as common
 
 BATCH_SIZE = 256 # Number of examples in a batch
-SEQUENCE_SIZE = 32 # Number of characters in an example
-CONTEXT = 0 # Number of context words to include
-SHUFFLE = True # Whether to shuffle examples within a batch
-
-BUCKETS = {}
+SEQUENCE_SIZE = 64 # Number of characters in an example
+CONTEXT = 2 # Number of context words to include
+SHUFFLE = False # Whether to shuffle examples within a batch
+OOV_ONLY = True # Whether to generate corpus only with OOVs
 
 CHARS = [u'~', u'!', u'#', u'$', u'%', u'&', u"'", u'*', u',', u'-', u'.', 
 		u'/', u'0', u'1', u'2', u'3', u'4', u'5', u'6', u'7', u'8', u'9', u':',
@@ -23,7 +23,7 @@ CHARS = [u'~', u'!', u'#', u'$', u'%', u'&', u"'", u'*', u',', u'-', u'.',
 		u'q', u'r', u's', u't', u'u', u'v', u'w', u'x', u'y', u'z', 
 		u'{', u'}', u' '] #Special characters for our input (plus ~ for unknown)
 		
-TAGS = [u'#', u'$', u"''", u',', u'-LRB-', u'-NONE-', u'-RRB-', u'.', u':', 
+TAGS = [u'#', u'$', u"''", u',', u'-LRB-', u'-NONE-', u'-RRB-',  u'.', u':', 
 		u'CC', u'CD', u'DT', u'EX', u'FW', u'IN', u'JJ', u'JJR', u'JJS', u'LS',
 		u'MD', u'NN', u'NNP', u'NNPS', u'NNS', u'PDT', u'POS', u'PRP', u'PRP$',
 		u'RB', u'RBR', u'RBS', u'RP', u'SYM', u'TO', u'UH', u'VB', u'VBD',
@@ -41,21 +41,11 @@ DEV_SCTS = ['19', '20', '21']
 TEST_SCTS = ['22', '23', '24']
 
 def get_example(sent, i):
-	global BUCKETS
-
 	s = max(i - CONTEXT, 0)
 	before = " ".join([w for w, _ in sent[s:i]])
 	after = " ".join([w for w, _ in sent[i+1:i+1+CONTEXT]])
 	sequence = before + "{" + sent[i][0] + "}" + after
 	tag = sent[i][1]
-	
-	print sequence
-	exit()
-#	if len(sequence) > 24:
-#		if len(sequence) not in BUCKETS:
-#			BUCKETS[len(sequence)] = [sequence]
-#		else:
-#			BUCKETS[len(sequence)].append(sequence)
 	
 	# Squish within the sequence size (cut if it's too much and pad)
 	if len(sequence) > SEQUENCE_SIZE:
@@ -69,7 +59,7 @@ def get_example(sent, i):
 
 def empty_example():
 	x = np.zeros(shape=(SEQUENCE_SIZE,), dtype=np.float32)
-	y = T_TO_I[u'-NONE-']
+	y = T_TO_I[u'#'] # It really doesn't matter what we use here.
 
 	return (x, y)
 
@@ -82,6 +72,14 @@ def get_batches(scts):
 	batch_xs, batch_ys = empty_batch()
 	ex_cnt = 0
 	
+	if OOV_ONLY:
+		iv_set = set()
+		def add_iv(f):
+			for sent in ptb.sents(f):
+				for tok in sent:
+					iv_set.add(tok)
+		common.for_all_in_ptb_scts(TRAIN_SCTS, add_iv)
+	
 	for sct in scts:
 		print "Section " + sct 
 		fs = [f for f in ptb.fileids() if f.startswith("WSJ/" + sct)]
@@ -91,6 +89,14 @@ def get_batches(scts):
 			# create an example and add it to the batch.
 			for sent in ptb.tagged_sents(f):
 				for i in range(len(sent)):
+					# Ignore "None" tags (not overt lingustic elements)
+					if sent[i][1] == "-NONE-":
+						continue
+					
+					# If we're in OOV, skip known tokens
+					if OOV_ONLY and sent[i][0] in iv_set:
+						continue
+						
 					x, y = get_example(sent, i)
 					batch_xs[ex_cnt] = x
 					batch_ys[ex_cnt] = y
@@ -112,7 +118,7 @@ def get_batches(scts):
 			batch_ys[ex_cnt] = y
 			ex_cnt += 1
 		yield (batch_xs, batch_ys)
-		
+	
 	raise StopIteration
 
 def shuffle_batch(x, y):
@@ -135,11 +141,34 @@ def write_set(name, scts):
 	pyk.dump((all_x, all_y), f)
 	f.close()
 
+def fake_words():
+	f = open("fake.txt")
+	fw = eval(f.read())
+	f.close()
+	
+	batch_xs, batch_ys = empty_batch()
+	i = 0
+	for tag in fw:
+		y = T_TO_I[tag]
+		for w in fw[tag]:
+			seq = "{" + w + "}"
+			seq = seq + ('~' * (SEQUENCE_SIZE - len(seq)))
+			x = np.array([C_TO_I[c] for c in seq], dtype=np.float32)
+			batch_xs[i] = x
+			batch_ys[i] = y
+			i += 1
+
+	f = open("fake.set", "wb")
+	pyk.dump(([batch_xs], [batch_ys]), f)
+	f.close()
+
 if __name__ == '__main__':
 	params = ("ctx" + str(CONTEXT) + "_b" + str(BATCH_SIZE) + 
-			"_sq" + str(SEQUENCE_SIZE) + "_sh" + str(SHUFFLE))
-	write_set("train_" + params, TRAIN_SCTS)
-	write_set("dev_" + params, DEV_SCTS)
+			"_sq" + str(SEQUENCE_SIZE) + "_sh" + str(SHUFFLE) +
+			"_oov" + str(OOV_ONLY))
+	if not OOV_ONLY:
+		write_set("train_" + params, TRAIN_SCTS)
+		write_set("dev_" + params, DEV_SCTS)
 	write_set("test_" + params, TEST_SCTS)
 	
 	#print BUCKETS
